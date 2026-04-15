@@ -1,0 +1,17 @@
+@echo off
+REM Start the Python server and open the browser
+
+cd /d "%~dp0"
+
+REM Start the Python server in the background
+start python server.py
+
+REM Wait a moment for the server to start
+timeout /t 2 /nobreak
+
+REM Open the browser to the page
+start http://localhost:8002/index.html
+
+echo Server started and browser opened!
+
+timeout /t 2

@@ -1,387 +1,70 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Weather API Comparison</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg: #0a0e1a;
-    --surface: #111827;
-    --border: #1e2d45;
-    --accent: #38bdf8;
-    --accent2: #fb923c;
-    --accent3: #a78bfa;
-    --text: #e2e8f0;
-    --muted: #64748b;
-    --dawn: #fde68a;
-    --dusk: #7c3aed;
-  }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Syne', sans-serif;
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
-
-  /* Starfield background */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      radial-gradient(1px 1px at 10% 15%, rgba(255,255,255,0.4) 0%, transparent 100%),
-      radial-gradient(1px 1px at 25% 40%, rgba(255,255,255,0.3) 0%, transparent 100%),
-      radial-gradient(1px 1px at 40% 8%, rgba(255,255,255,0.35) 0%, transparent 100%),
-      radial-gradient(1px 1px at 60% 25%, rgba(255,255,255,0.25) 0%, transparent 100%),
-      radial-gradient(1px 1px at 75% 10%, rgba(255,255,255,0.4) 0%, transparent 100%),
-      radial-gradient(1px 1px at 85% 45%, rgba(255,255,255,0.3) 0%, transparent 100%),
-      radial-gradient(1px 1px at 92% 20%, rgba(255,255,255,0.35) 0%, transparent 100%),
-      radial-gradient(1.5px 1.5px at 5% 60%, rgba(255,255,255,0.2) 0%, transparent 100%),
-      radial-gradient(1px 1px at 30% 70%, rgba(255,255,255,0.3) 0%, transparent 100%),
-      radial-gradient(1px 1px at 55% 80%, rgba(255,255,255,0.25) 0%, transparent 100%),
-      radial-gradient(1.5px 1.5px at 80% 65%, rgba(255,255,255,0.2) 0%, transparent 100%),
-      radial-gradient(1px 1px at 95% 75%, rgba(255,255,255,0.35) 0%, transparent 100%);
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  header {
-    position: relative;
-    z-index: 10;
-    padding: 2rem 2.5rem 1rem;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: flex-end;
-    gap: 2rem;
-    flex-wrap: wrap;
-    background: linear-gradient(to bottom, rgba(10,14,26,0.95), transparent);
-  }
-
-  .logo {
-    font-size: 2.2rem;
-    font-weight: 800;
-    letter-spacing: -0.04em;
-    color: var(--text);
-  }
-  .logo span { color: var(--accent); }
-
-  .subtitle {
-    font-family: 'Space Mono', monospace;
-    font-size: 0.7rem;
-    color: var(--muted);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    margin-bottom: 0.3rem;
-  }
-
-  .location-bar {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-left: auto;
-    flex-wrap: wrap;
-  }
-
-  .location-input {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 0.5rem 1rem;
-    border-radius: 6px;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.78rem;
-    width: 220px;
-    outline: none;
-    transition: border-color 0.2s;
-  }
-  .location-input:focus { border-color: var(--accent); }
-
-  .fetch-btn {
-    background: var(--accent);
-    color: #0a0e1a;
-    border: none;
-    padding: 0.5rem 1.4rem;
-    border-radius: 6px;
-    font-family: 'Syne', sans-serif;
-    font-weight: 700;
-    font-size: 0.85rem;
-    cursor: pointer;
-    transition: opacity 0.2s, transform 0.1s;
-  }
-  .fetch-btn:hover { opacity: 0.85; }
-  .fetch-btn:active { transform: scale(0.97); }
-  .fetch-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-  .legend-bar {
-    display: flex;
-    gap: 1.5rem;
-    padding: 0.75rem 2.5rem;
-    background: rgba(17,24,39,0.7);
-    border-bottom: 1px solid var(--border);
-    flex-wrap: wrap;
-    align-items: center;
-    position: relative;
-    z-index: 10;
-  }
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    font-size: 0.72rem;
-    font-family: 'Space Mono', monospace;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-  .legend-dot {
-    width: 10px; height: 10px;
-    border-radius: 2px;
-  }
-
-  main {
-    position: relative;
-    z-index: 5;
-    padding: 2rem 2.5rem;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 700px), 1fr));
-    gap: 2rem;
-  }
-
-  .api-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
-    transition: border-color 0.3s;
-    position: relative;
-  }
-  .api-card:hover { border-color: var(--accent); }
-
-  .card-header {
-    padding: 1rem 1.5rem 0.75rem;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .api-badge {
-    font-family: 'Space Mono', monospace;
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    padding: 0.2rem 0.6rem;
-    border-radius: 4px;
-    background: rgba(56,189,248,0.12);
-    color: var(--accent);
-    border: 1px solid rgba(56,189,248,0.3);
-    white-space: nowrap;
-  }
-
-  .card-title {
-    font-weight: 800;
-    font-size: 1.05rem;
-    letter-spacing: -0.02em;
-  }
-
-  .card-meta {
-    margin-left: auto;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.62rem;
-    color: var(--muted);
-    text-align: right;
-  }
-
-  .status-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    padding: 0.18rem 0.5rem;
-    border-radius: 20px;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.6rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-top: 0.2rem;
-  }
-  .status-pill.loading { background: rgba(250,204,21,0.1); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3); }
-  .status-pill.ok      { background: rgba(34,197,94,0.1);  color: #4ade80; border: 1px solid rgba(74,222,128,0.3); }
-  .status-pill.error   { background: rgba(239,68,68,0.1);  color: #f87171; border: 1px solid rgba(248,113,113,0.3); }
-  .status-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-  .status-pill.loading .status-dot { animation: pulse 1s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-
-  .chart-wrap {
-    padding: 1rem 1.2rem 0.75rem;
-    position: relative;
-  }
-
-  .chart-container {
-    position: relative;
-    height: 260px;
-  }
-
-  .loading-overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: rgba(17,24,39,0.85);
-    border-radius: 8px;
-    gap: 0.75rem;
-    z-index: 20;
-  }
-  .spinner {
-    width: 32px; height: 32px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-text { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--muted); }
-
-  .error-overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: rgba(17,24,39,0.9);
-    border-radius: 8px;
-    gap: 0.5rem;
-    z-index: 20;
-    padding: 1rem;
-  }
-  .error-icon { font-size: 1.8rem; }
-  .error-text {
-    font-family: 'Space Mono', monospace;
-    font-size: 0.65rem;
-    color: #f87171;
-    text-align: center;
-    max-width: 280px;
-    line-height: 1.5;
-  }
-
-  .day-summary {
-    display: flex;
-    gap: 0.5rem;
-    padding: 0 1.2rem 1rem;
-    flex-wrap: wrap;
-  }
-  .day-pill {
-    flex: 1;
-    min-width: 90px;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.5rem 0.75rem;
-    text-align: center;
-  }
-  .day-name {
-    font-family: 'Space Mono', monospace;
-    font-size: 0.6rem;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 0.25rem;
-  }
-  .day-temps {
-    font-size: 0.85rem;
-    font-weight: 700;
-    display: flex;
-    justify-content: center;
-    gap: 0.4rem;
-    align-items: baseline;
-  }
-  .temp-max { color: var(--accent2); }
-  .temp-min { color: var(--accent); font-size: 0.7rem; }
-  .day-precip {
-    font-family: 'Space Mono', monospace;
-    font-size: 0.6rem;
-    color: var(--accent3);
-    margin-top: 0.15rem;
-  }
-
-  footer {
-    position: relative;
-    z-index: 10;
-    padding: 1.5rem 2.5rem;
-    border-top: 1px solid var(--border);
-    font-family: 'Space Mono', monospace;
-    font-size: 0.62rem;
-    color: var(--muted);
-    display: flex;
-    gap: 2rem;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
-  @media (max-width: 600px) {
-    header { padding: 1.5rem 1rem 1rem; }
-    main { padding: 1rem; }
-    .legend-bar { padding: 0.75rem 1rem; }
-  }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SkyDiff - Weather API Comparison</title>
+  <script src="chart.umd.min.js"></script>
+  <script src="config.js"></script>
 </head>
-<body>
-
-<header>
-  <div>
-    <div class="subtitle">72-hour forecast comparison</div>
-    <div class="logo">Sky<span>Diff</span></div>
-  </div>
-  <div class="location-bar">
-    <input class="location-input" id="cityInput" type="text" placeholder="City or ZIP code..." value="15108">
-    <button class="fetch-btn" id="fetchBtn" onclick="loadAll()">Fetch Forecasts</button>
-  </div>
-</header>
-
-<div class="legend-bar">
-  <div class="legend-item"><div class="legend-dot" style="background:#fb923c"></div>Temperature °F</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div>Precip. Chance %</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#38bdf8; opacity:0.5"></div>Precip. Accumulation (mm)</div>
-  <div class="legend-item"><div class="legend-dot" style="background:rgba(255,255,255,0.15); border:1px solid #334155"></div>Day/Night Background</div>
-  <div class="legend-item"><div style="width:10px;height:10px;border-left:2px dashed #475569"></div>Midnight</div>
-</div>
-
-<main id="mainGrid">
-  <!-- Cards injected by JS -->
-</main>
-
-<footer>
-  <span>DATA SOURCES: Open-Meteo (no key) · OpenWeatherMap (free tier) · WeatherAPI.com (free tier) · wttr.in (no key) · NOAA/NWS (no key · US only)</span>
-  <span style="margin-left:auto">All times local · Temp in °F · Precip in mm</span>
-</footer>
 
 <script>
+// ─── STATUS & ERROR HELPERS ────────────────────────────────────────────────
+function setStatus(apiId, status, text) {
+  const el = document.getElementById(`status-${apiId}`);
+  if (!el) return;
+  let color, icon;
+  if (status === 'loading') {
+    color = 'status-pill loading'; icon = '<span class="status-dot"></span>';
+  } else if (status === 'ok') {
+    color = 'status-pill ok'; icon = '<span class="status-dot"></span>';
+  } else {
+    color = 'status-pill error'; icon = '<span class="status-dot"></span>';
+  }
+  el.innerHTML = `<span class="${color}">${icon}${text}</span>`;
+}
+
+function showError(apiId, message) {
+  const container = document.getElementById(`chartContainer-${apiId}`);
+  if (!container) return;
+  // Remove any existing error overlay
+  const prev = container.querySelector('.error-overlay');
+  if (prev) prev.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'error-overlay';
+  overlay.innerHTML = `<div class="error-icon">⚠️</div><div class="error-text">${message}</div>`;
+  container.appendChild(overlay);
+}
 // ─── CONFIG ────────────────────────────────────────────────────────────────
 // Free API keys are included for demonstration - these are rate-limited public keys.
 // Replace with your own from each provider's free tier.
+// ===================== WEATHERAPI.COM KEY =====================
+// The WeatherAPI.com key is now loaded from config.js (not tracked by git).
+// To use WeatherAPI.com, create a config.js file with: window.WEATHERAPI_KEY = "your_key_here";
 const OWM_KEY    = 'bd5e378503939ddaee76f12ad7a97608'; // OpenWeatherMap demo key
-const WAPI_KEY   = 'f2b9b00d56804fc0b32143840252101'; // WeatherAPI.com demo key  
 const WBIT_KEY   = 'a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8'; // Weatherbit placeholder
 
+const openMeteoModels = [
+  { id: 'open-meteo-auto',   model: 'auto',       name: 'Open-Meteo (Auto)',       color: '#34d399' },
+  { id: 'open-meteo-gfs',    model: 'gfs',        name: 'Open-Meteo (GFS)',        color: '#10b981' },
+  { id: 'open-meteo-icon',   model: 'icon',       name: 'Open-Meteo (ICON)',       color: '#06b6d4' },
+  { id: 'open-meteo-ecmwf',  model: 'ecmwf',      name: 'Open-Meteo (ECMWF)',      color: '#6366f1' },
+  { id: 'open-meteo-gem',    model: 'gem',        name: 'Open-Meteo (GEM)',        color: '#f59e42' },
+  { id: 'open-meteo-jma',    model: 'jma',        name: 'Open-Meteo (JMA)',        color: '#f472b6' },
+  { id: 'open-meteo-meteofrance', model: 'meteofrance', name: 'Open-Meteo (MeteoFrance)', color: '#a78bfa' },
+  { id: 'open-meteo-dwd',    model: 'dwd',        name: 'Open-Meteo (DWD)',        color: '#fbbf24' },
+  { id: 'open-meteo-ukmo',   model: 'ukmo',       name: 'Open-Meteo (UKMO)',       color: '#fb7185' }
+];
+
 const APIS = [
-  {
-    id: 'open-meteo',
-    name: 'Open-Meteo',
+  ...openMeteoModels.map(m => ({
+    id: m.id,
+    name: m.name,
     badge: 'No Key · Open Source',
     docs: 'open-meteo.com',
-    color: '#34d399',
-    fetch: fetchOpenMeteo
-  },
+    color: m.color,
+    fetch: geo => fetchOpenMeteo(geo, m.model)
+  })),
   {
     id: 'openweathermap',
     name: 'OpenWeatherMap',
@@ -418,7 +101,12 @@ const APIS = [
 
 // ─── GEOCODE VIA NOMINATIM (no key needed) ─────────────────────────────────
 async function geocode(query) {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
+  // If the query looks like a US zip code (5 digits), append ', USA' to bias geocoding
+  let q = query;
+  if (/^\d{5}$/.test(query)) {
+    q = query + ', USA';
+  }
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`;
   const r = await fetch(url, { headers: { 'Accept-Language': 'en' } });
   const data = await r.json();
   if (!data.length) throw new Error('Location not found');
@@ -427,7 +115,10 @@ async function geocode(query) {
 
 // ─── OPEN-METEO ─────────────────────────────────────────────────────────────
 async function fetchOpenMeteo(geo) {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${geo.lat}&longitude=${geo.lon}&hourly=temperature_2m,precipitation_probability,precipitation&temperature_unit=fahrenheit&forecast_days=3&timezone=auto`;
+  // Accept model as second argument
+  let model = arguments[1] || 'auto';
+  let modelParam = model && model !== 'auto' ? `&model=${model}` : '';
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${geo.lat}&longitude=${geo.lon}&hourly=temperature_2m,precipitation_probability,precipitation&temperature_unit=fahrenheit&forecast_days=3&timezone=auto${modelParam}`;
   const r = await fetch(url);
   const d = await r.json();
   return parseOpenMeteo(d);
@@ -455,16 +146,21 @@ async function fetchOWM(geo) {
 }
 
 function parseOWM(d) {
-  const times  = d.list.map(x => new Date(x.dt * 1000));
-  const temp   = d.list.map(x => x.main.temp);
-  const pop    = d.list.map(x => (x.pop || 0) * 100);
-  const precip = d.list.map(x => (x.rain && x.rain['3h']) ? x.rain['3h'] : 0);
+  // Limit to 72 data points (3 days, 3-hour intervals)
+  const limit = 72;
+  const times  = d.list.slice(0, limit).map(x => new Date(x.dt * 1000));
+  const temp   = d.list.slice(0, limit).map(x => x.main.temp);
+  const pop    = d.list.slice(0, limit).map(x => (x.pop || 0) * 100);
+  const precip = d.list.slice(0, limit).map(x => (x.rain && x.rain['3h']) ? x.rain['3h'] : 0);
   return { times, temp, pop, precip };
 }
 
 // ─── WEATHERAPI.COM ─────────────────────────────────────────────────────────
 async function fetchWeatherAPI(geo) {
-  const url = `https://api.weatherapi.com/v1/forecast.json?key=${WAPI_KEY}&q=${geo.lat},${geo.lon}&days=3&aqi=no&alerts=no`;
+  if (!window.WEATHERAPI_KEY || window.WEATHERAPI_KEY === 'YOUR_WEATHERAPI_KEY_HERE') {
+    throw new Error('WeatherAPI.com key missing. Please create config.js and add your free API key.');
+  }
+  const url = `https://api.weatherapi.com/v1/forecast.json?key=${window.WEATHERAPI_KEY}&q=${geo.lat},${geo.lon}&days=3&aqi=no&alerts=no`;
   const r = await fetch(url);
   if (!r.ok) throw new Error(`WeatherAPI error ${r.status}`);
   const d = await r.json();
@@ -534,7 +230,10 @@ async function fetchNOAA(geo) {
   if (!hourlyUrl) throw new Error('NWS did not return a forecast URL');
 
   const fcRes = await fetch(hourlyUrl, { headers: { 'User-Agent': 'SkyDiff/1.0 weather-compare-tool' } });
-  if (!fcRes.ok) throw new Error(`NWS forecast error ${fcRes.status}`);
+  if (!fcRes.ok) {
+    if (fcRes.status === 404) throw new Error('Hourly forecast not available for this US location.');
+    throw new Error(`NWS forecast error ${fcRes.status}`);
+  }
   const fcData = await fcRes.json();
   return parseNOAA(fcData);
 }
@@ -559,7 +258,25 @@ function parseNOAA(d) {
 // ─── CHART RENDERING ─────────────────────────────────────────────────────────
 const chartInstances = {};
 
+// Store all temperature arrays for global min/max calculation
+let allTempsGlobal = [];
+
 function celsiusToF(c) { return c * 9/5 + 32; }
+
+function getGlobalTempRange() {
+  if (!allTempsGlobal.length) return [null, null];
+  let min = Math.min(...allTempsGlobal.flat());
+  let max = Math.max(...allTempsGlobal.flat());
+  return [Math.floor(min) - 5, Math.ceil(max) + 5];
+}
+
+function resetGlobalTemps() {
+  allTempsGlobal = [];
+}
+
+function addToGlobalTemps(tempArr) {
+  allTempsGlobal.push(tempArr);
+}
 
 function buildDayNightPlugin(times) {
   return {
@@ -647,7 +364,7 @@ function buildMinMaxPlugin(times, temps) {
       const { left, right, top, bottom } = chartArea;
       const w = right - left;
       const total = times.length;
-      const yScale = scales.y;
+      const yScale = scales.yTemp;
 
       // Group by day
       const dayMap = {};
@@ -691,12 +408,65 @@ function buildMinMaxPlugin(times, temps) {
   };
 }
 
-function renderChart(apiId, data) {
-  const canvas = document.getElementById(`canvas-${apiId}`);
-  if (!canvas) return;
+// ─── ALIGN DATA TO COMMON TIME AXIS ───────────────────────────────────────
+function alignDataToTimes(data, targetTimes) {
+  const { times: sourceTimes, temp, pop, precip } = data;
+  
+  // Create interpolation function
+  const interpolate = (sourceData) => {
+    return targetTimes.map(targetTime => {
+      // Find the two nearest source points
+      let idx = sourceTimes.findIndex(t => t >= targetTime);
+      
+      if (idx === -1) {
+        // Target time is after all source times, use last value
+        return sourceData[sourceData.length - 1];
+      }
+      if (idx === 0 && targetTime < sourceTimes[0]) {
+        // Target time is before all source times, use first value
+        return sourceData[0];
+      }
+      
+      // Exact match or interpolate
+      if (sourceTimes[idx].getTime() === targetTime.getTime()) {
+        return sourceData[idx];
+      }
+      
+      // Linear interpolation
+      const prevIdx = idx - 1;
+      const nextIdx = idx;
+      const prevTime = sourceTimes[prevIdx];
+      const nextTime = sourceTimes[nextIdx];
+      const prevVal = sourceData[prevIdx];
+      const nextVal = sourceData[nextIdx];
+      
+      const totalDiff = nextTime.getTime() - prevTime.getTime();
+      const targetDiff = targetTime.getTime() - prevTime.getTime();
+      const fraction = targetDiff / totalDiff;
+      
+      return prevVal + (nextVal - prevVal) * fraction;
+    });
+  };
+  
+  return {
+    times: targetTimes,
+    temp: interpolate(temp),
+    pop: interpolate(pop),
+    precip: interpolate(precip)
+  };
+}
 
-  const { times, temp, pop, precip } = data;
+// ─── HIDE LOADING OVERLAY ────────────────────────────────────────────────────
+function hideOverlay(apiId) {
+  const overlay = document.getElementById(`overlay-${apiId}`);
+  if (overlay) {
+    overlay.classList.add('hidden');
+  }
+}
 
+function renderChart(apiId, data, yTempRange, forcedTimes) {
+  let { times, temp, pop, precip } = data;
+  if (forcedTimes) times = forcedTimes;
   // Build x-axis labels: show hour every N hours
   const totalPts = times.length;
   const labelStep = totalPts <= 72 ? 6 : 12;
@@ -716,6 +486,11 @@ function renderChart(apiId, data) {
   const midnightPlugin = buildMidnightPlugin(times);
   const minMaxPlugin   = buildMinMaxPlugin(times, temp);
 
+  const canvas = document.getElementById(`canvas-${apiId}`);
+  if (!canvas) {
+    console.error(`Canvas element not found for ${apiId}`);
+    return;
+  }
   const ctx = canvas.getContext('2d');
   chartInstances[apiId] = new Chart(ctx, {
     type: 'bar',
@@ -810,6 +585,8 @@ function renderChart(apiId, data) {
           position: 'left',
           grid: { color: 'rgba(30,45,69,0.3)' },
           border: { color: '#1e2d45', dash: [2, 2] },
+          min: yTempRange && yTempRange[0] != null ? yTempRange[0] : undefined,
+          max: yTempRange && yTempRange[1] != null ? yTempRange[1] : undefined,
           ticks: {
             color: '#fb923c',
             font: { family: 'Space Mono', size: 8 },
@@ -841,33 +618,7 @@ function renderChart(apiId, data) {
   });
 }
 
-// ─── DAY SUMMARY ─────────────────────────────────────────────────────────────
-function renderDaySummary(apiId, data) {
-  const el = document.getElementById(`summary-${apiId}`);
-  if (!el) return;
-  const { times, temp, pop, precip } = data;
-  const days = {};
-  times.forEach((t, i) => {
-    const k = t.toDateString();
-    if (!days[k]) days[k] = { date: t, temps: [], pops: [], precips: [] };
-    days[k].temps.push(temp[i]);
-    days[k].pops.push(pop[i]);
-    days[k].precips.push(precip[i]);
-  });
 
-  el.innerHTML = Object.values(days).map(d => {
-    const mx = Math.round(Math.max(...d.temps));
-    const mn = Math.round(Math.min(...d.temps));
-    const p  = Math.round(Math.max(...d.pops));
-    const acc = d.precips.reduce((a,b)=>a+b,0).toFixed(1);
-    const label = d.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    return `<div class="day-pill">
-      <div class="day-name">${label}</div>
-      <div class="day-temps"><span class="temp-max">${mx}°</span><span class="temp-min">${mn}°</span></div>
-      <div class="day-precip">💧${p}% · ${acc}mm</div>
-    </div>`;
-  }).join('');
-}
 
 // ─── CARD INIT ────────────────────────────────────────────────────────────────
 function createCard(api) {
@@ -895,39 +646,142 @@ function createCard(api) {
         </div>
       </div>
     </div>
-    <div class="day-summary" id="summary-${api.id}"></div>
   `;
   grid.appendChild(card);
 }
 
-function setStatus(id, type, msg) {
-  const el = document.getElementById(`status-${id}`);
-  if (el) el.innerHTML = `<span class="status-pill ${type}"><span class="status-dot"></span>${msg}</span>`;
+// ─── THEME MANAGEMENT ──────────────────────────────────────────────────────
+const themes = [
+  { name: 'midnight', label: '🎨 Midnight', emoji: '🌙' },
+  { name: 'ocean', label: '🌊 Ocean', emoji: '💙' },
+  { name: 'forest', label: '🌲 Forest', emoji: '💚' },
+  { name: 'sunset', label: '🌅 Sunset', emoji: '🧡' },
+  { name: 'cosmic', label: '✨ Cosmic', emoji: '💜' },
+  { name: 'dawn', label: '☀️ Dawn', emoji: '🩵' },
+  { name: 'aqua', label: '💎 Aqua', emoji: '🌊' },
+  { name: 'sage', label: '🍃 Sage', emoji: '💚' },
+  { name: 'peach', label: '🍑 Peach', emoji: '🧡' },
+  { name: 'lavender', label: '💜 Lavender', emoji: '🦋' }
+];
+
+let currentThemeIndex = 0;
+
+function initTheme() {
+  const savedTheme = localStorage.getItem('theme-scheme');
+  if (savedTheme) {
+    currentThemeIndex = themes.findIndex(t => t.name === savedTheme);
+    if (currentThemeIndex === -1) currentThemeIndex = 0;
+  }
+  applyTheme(currentThemeIndex);
 }
 
-function hideOverlay(id) {
-  const el = document.getElementById(`overlay-${id}`);
-  if (el) el.remove();
+function applyTheme(index) {
+  const theme = themes[index];
+  document.body.className = theme.name === 'midnight' ? '' : `scheme-${theme.name}`;
+  localStorage.setItem('theme-scheme', theme.name);
+  const btn = document.getElementById('themeToggle');
+  if (btn) btn.textContent = theme.label;
 }
 
-function showError(id, msg) {
-  const container = document.getElementById(`chartContainer-${id}`);
-  if (!container) return;
-  // Remove loading overlay if present
-  const loading = document.getElementById(`overlay-${id}`);
-  if (loading) loading.remove();
-  const err = document.createElement('div');
-  err.className = 'error-overlay';
-  err.innerHTML = `<div class="error-icon">⚠️</div><div class="error-text">${msg}<br><br>This may be a CORS restriction or API key issue. Try running from a server or replacing with your own key.</div>`;
-  container.appendChild(err);
+function cycleTheme() {
+  currentThemeIndex = (currentThemeIndex + 1) % themes.length;
+  applyTheme(currentThemeIndex);
+}
+
+// ─── DATA CACHE ──────────────────────────────────────────────────────────────
+const dataCache = {
+  location: null,
+  geo: null,
+  times: null,
+  results: null,
+  yTempRange: null,
+  timestamp: null,
+  CACHE_TTL_MS: 10 * 60 * 1000  // 10 minutes
+};
+
+function isCacheValid(location) {
+  if (!dataCache.results) return false;
+  if (dataCache.location !== location) return false;
+  const elapsed = Date.now() - dataCache.timestamp;
+  return elapsed < dataCache.CACHE_TTL_MS;
+}
+
+// ─── FETCH WEATHER DATA ──────────────────────────────────────────────────────
+async function fetchWeatherData(geo, times) {
+  const apiList = APIS;  // Fetch for ALL APIs, not just selected ones
+  const results = await Promise.allSettled(
+    apiList.map(async api => {
+      try {
+        let data = await api.fetch(geo);
+        // Align data to common times
+        data = alignDataToTimes(data, times);
+        addToGlobalTemps(data.temp);
+        return { api, data };
+      } catch (e) {
+        setStatus(api.id, 'error', 'error');
+        showError(api.id, `${api.name} failed: ${e.message}`);
+        return null;
+      }
+    })
+  );
+  return results;
+}
+
+// ─── RENDER CHARTS FROM CACHE ────────────────────────────────────────────────
+function renderChartsFromCache() {
+  const btn = document.getElementById('fetchBtn');
+  const grid = document.getElementById('mainGrid');
+  
+  // Get selected sources/models
+  const checkedSources = Array.from(document.querySelectorAll('.slicer-toggle.active')).map(btn => btn.getAttribute('data-value'));
+
+  // Clear grid
+  grid.innerHTML = '';
+  Object.keys(chartInstances).forEach(k => {
+    if (chartInstances[k]) { chartInstances[k].destroy(); delete chartInstances[k]; }
+  });
+
+  // Reset global temps
+  resetGlobalTemps();
+
+  // Create cards for selected sources only
+  APIS.filter(api => checkedSources.includes(api.id)).forEach(api => createCard(api));
+
+  // Render charts from cache
+  dataCache.results.forEach(res => {
+    if (res && res.value && res.value.data) {
+      const { api, data } = res.value;
+      // Only render if this API is in the selected sources
+      if (checkedSources.includes(api.id)) {
+        hideOverlay(api.id);
+        renderChart(api.id, data, dataCache.yTempRange, dataCache.times);
+        setStatus(api.id, 'ok', 'cached data');
+      }
+    }
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Fetch Forecasts';
 }
 
 // ─── LOAD ALL ────────────────────────────────────────────────────────────────
-async function loadAll() {
+async function loadAll(forceRefresh = false) {
   const btn = document.getElementById('fetchBtn');
   const cityInput = document.getElementById('cityInput');
   btn.disabled = true;
   btn.textContent = 'Loading…';
+
+  let geoInput = cityInput.value.trim() || '15108';
+  
+  // Check if we can use cache
+  if (!forceRefresh && isCacheValid(geoInput)) {
+    // Use cached data without refetching
+    renderChartsFromCache();
+    return;
+  }
+
+  // Get selected sources/models
+  const checkedSources = Array.from(document.querySelectorAll('.slicer-toggle.active')).map(btn => btn.getAttribute('data-value'));
 
   // Clear grid
   const grid = document.getElementById('mainGrid');
@@ -936,14 +790,24 @@ async function loadAll() {
     if (chartInstances[k]) { chartInstances[k].destroy(); delete chartInstances[k]; }
   });
 
-  // Create cards first
-  APIS.forEach(api => createCard(api));
+  // Reset global temps
+  resetGlobalTemps();
+
+  // Create cards for selected sources only
+  APIS.filter(api => checkedSources.includes(api.id)).forEach(api => createCard(api));
 
   // Geocode
   let geo;
   try {
-    geo = await geocode(cityInput.value.trim() || '15108');
+    geo = await geocode(geoInput);
+    // Show geocode info at bottom
+    const geoInfo = document.getElementById('geo-info');
+    if (geoInfo) {
+      geoInfo.textContent = `Location: ${geo.name || geoInput} | Lat: ${geo.lat.toFixed(4)}, Lon: ${geo.lon.toFixed(4)}`;
+    }
   } catch (e) {
+    const geoInfo = document.getElementById('geo-info');
+    if (geoInfo) geoInfo.textContent = '';
     APIS.forEach(api => {
       setStatus(api.id, 'error', 'geo error');
       showError(api.id, 'Could not geocode location: ' + e.message);
@@ -953,32 +817,664 @@ async function loadAll() {
     return;
   }
 
-  // Fetch all in parallel
-  await Promise.allSettled(APIS.map(async api => {
-    try {
-      const data = await api.fetch(geo);
-      hideOverlay(api.id);
-      renderChart(api.id, data);
-      renderDaySummary(api.id, data);
-      setStatus(api.id, 'ok', 'live data');
-    } catch (e) {
-      console.error(api.name, e);
-      setStatus(api.id, 'error', 'error');
-      showError(api.id, `${api.name} failed: ${e.message}`);
+  // Build common time axis: from 4 hours ago to 72 hours ahead, hourly
+  const now = new Date();
+  const start = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+  const times = [];
+  for (let i = 0; i < 72; i++) {
+    times.push(new Date(start.getTime() + i * 60 * 60 * 1000));
+  }
+
+  // Fetch all data for all APIs
+  const results = await fetchWeatherData(geo, times);
+
+  // Compute global yTemp range
+  const yTempRange = getGlobalTempRange();
+
+  // Cache the results
+  dataCache.location = geoInput;
+  dataCache.geo = geo;
+  dataCache.times = times;
+  dataCache.results = results;
+  dataCache.yTempRange = yTempRange;
+  dataCache.timestamp = Date.now();
+
+  // Render charts with unified yTemp range and x axis (only for selected APIs)
+  results.forEach(res => {
+    if (res && res.value && res.value.data) {
+      const { api, data } = res.value;
+      // Only render if this API is in the selected sources
+      if (checkedSources.includes(api.id)) {
+        hideOverlay(api.id);
+        renderChart(api.id, data, yTempRange, times);
+        setStatus(api.id, 'ok', 'live data');
+      }
     }
-  }));
+  });
 
   btn.disabled = false;
   btn.textContent = 'Fetch Forecasts';
 }
 
 // ─── BOOT ────────────────────────────────────────────────────────────────────
+let touchStartY = 0;
+
 window.addEventListener('DOMContentLoaded', () => {
+  // Initialize theme from localStorage
+  initTheme();
+  
+  // Theme toggle button
+  document.getElementById('themeToggle').addEventListener('click', cycleTheme);
+  
+  // Load all data on page open
   loadAll();
+  
+  // Fetch button click - force refresh
+  document.getElementById('fetchBtn').addEventListener('click', () => {
+    loadAll(true);  // Force refresh
+  });
+  
+  // Enter to force refresh
   document.getElementById('cityInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') loadAll();
+    if (e.key === 'Enter') loadAll(true);  // Force refresh on Enter
+  });
+  
+  // Slicer toggle listeners - just re-render, don't refetch
+  document.querySelectorAll('.slicer-toggle').forEach(btn => {
+    btn.addEventListener('click', function() {
+      btn.classList.toggle('active');
+      // Only re-render from cache, don't refetch
+      if (dataCache.results) {
+        renderChartsFromCache();
+      }
+    });
+  });
+  
+  // Pull-to-refresh: detect swipe down from top
+  document.addEventListener('touchstart', e => {
+    touchStartY = e.touches[0].clientY;
+  });
+  
+  document.addEventListener('touchend', e => {
+    const touchEndY = e.changedTouches[0].clientY;
+    const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    
+    // If at top of page and swiped down, refresh
+    if (scrollTop === 0 && touchEndY - touchStartY > 100) {
+      const btn = document.getElementById('fetchBtn');
+      btn.textContent = 'Refreshing…';
+      loadAll(true);  // Force refresh
+    }
   });
 });
 </script>
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  /* ─── COLOR SCHEMES ─────────────────────────────────────────────────────────── */
+  :root {
+    /* Midnight - Default */
+    --bg-primary: #0a0e1a;
+    --bg-secondary: #0f172a;
+    --bg-tertiary: #1e2d45;
+    --accent-primary: #3b82f6;
+    --accent-secondary: #2563eb;
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-tertiary: #64748b;
+    --border-color: #1e2d45;
+    --status-ok: #4ade80;
+    --status-loading: #fb923c;
+    --status-error: #ef4444;
+  }
+  
+  body.scheme-ocean {
+    --bg-primary: #0a1628;
+    --bg-secondary: #0f1f35;
+    --bg-tertiary: #1a3a52;
+    --accent-primary: #06b6d4;
+    --accent-secondary: #0891b2;
+    --text-primary: #cffafe;
+    --text-secondary: #9ecdd5;
+    --text-tertiary: #7dd3c0;
+    --border-color: #1a3a52;
+    --status-ok: #2dd4bf;
+    --status-loading: #22d3ee;
+    --status-error: #f87171;
+  }
+  
+  body.scheme-forest {
+    --bg-primary: #0f1f17;
+    --bg-secondary: #162a23;
+    --bg-tertiary: #1f3a2f;
+    --accent-primary: #10b981;
+    --accent-secondary: #059669;
+    --text-primary: #d0f0e6;
+    --text-secondary: #a7d8c8;
+    --text-tertiary: #6ee7b7;
+    --border-color: #1f3a2f;
+    --status-ok: #34d399;
+    --status-loading: #f59e42;
+    --status-error: #f87171;
+  }
+  
+  body.scheme-sunset {
+    --bg-primary: #1f0f0a;
+    --bg-secondary: #2d1a10;
+    --bg-tertiary: #3d2817;
+    --accent-primary: #f97316;
+    --accent-secondary: #ea580c;
+    --accent-tertiary: #c2410c;
+    --text-primary: #fce7d8;
+    --text-secondary: #fbcaa8;
+    --text-tertiary: #fed7aa;
+    --border-color: #3d2817;
+    --status-ok: #fb923c;
+    --status-loading: #fbbf24;
+    --status-error: #f97316;
+  }
+  
+  body.scheme-cosmic {
+    --bg-primary: #1a0a2e;
+    --bg-secondary: #260a4e;
+    --bg-tertiary: #3d1a6d;
+    --accent-primary: #a78bfa;
+    --accent-secondary: #9333ea;
+    --text-primary: #e9d5ff;
+    --text-secondary: #ddd6fe;
+    --text-tertiary: #c4b5fd;
+    --border-color: #3d1a6d;
+    --status-ok: #c084fc;
+    --status-loading: #f472b6;
+    --status-error: #e879f9;
+  }
+
+  /* ─── LIGHT THEMES ─────────────────────────────────────────────────────────── */
+  body.scheme-dawn {
+    --bg-primary: #f8fafc;
+    --bg-secondary: #f1f5f9;
+    --bg-tertiary: #e2e8f0;
+    --accent-primary: #3b82f6;
+    --accent-secondary: #2563eb;
+    --text-primary: #0f172a;
+    --text-secondary: #334155;
+    --text-tertiary: #64748b;
+    --border-color: #cbd5e1;
+    --status-ok: #16a34a;
+    --status-loading: #d97706;
+    --status-error: #dc2626;
+  }
+  
+  body.scheme-aqua {
+    --bg-primary: #f0f9ff;
+    --bg-secondary: #e0f2fe;
+    --bg-tertiary: #bae6fd;
+    --accent-primary: #0284c7;
+    --accent-secondary: #0369a1;
+    --text-primary: #082f49;
+    --text-secondary: #0c4a6e;
+    --text-tertiary: #164e63;
+    --border-color: #7dd3c0;
+    --status-ok: #0891b2;
+    --status-loading: #0ea5e9;
+    --status-error: #e11d48;
+  }
+  
+  body.scheme-sage {
+    --bg-primary: #f0fdf4;
+    --bg-secondary: #e7f5ee;
+    --bg-tertiary: #d1fae5;
+    --accent-primary: #059669;
+    --accent-secondary: #047857;
+    --text-primary: #052e16;
+    --text-secondary: #064e3b;
+    --text-tertiary: #065f46;
+    --border-color: #86efac;
+    --status-ok: #15803d;
+    --status-loading: #ea8c55;
+    --status-error: #dc2626;
+  }
+  
+  body.scheme-peach {
+    --bg-primary: #fffbf0;
+    --bg-secondary: #fef3c7;
+    --bg-tertiary: #fde68a;
+    --accent-primary: #f97316;
+    --accent-secondary: #ea580c;
+    --text-primary: #431407;
+    --text-secondary: #7c2d12;
+    --text-tertiary: #a16207;
+    --border-color: #fed7aa;
+    --status-ok: #ea580c;
+    --status-loading: #f59e42;
+    --status-error: #dc2626;
+  }
+  
+  body.scheme-lavender {
+    --bg-primary: #faf5ff;
+    --bg-secondary: #f3e8ff;
+    --bg-tertiary: #ede9fe;
+    --accent-primary: #7c3aed;
+    --accent-secondary: #6d28d9;
+    --text-primary: #4c1d95;
+    --text-secondary: #6b21a8;
+    --text-tertiary: #9333ea;
+    --border-color: #e9d5ff;
+    --status-ok: #7c3aed;
+    --status-loading: #ec4899;
+    --status-error: #be123c;
+  }
+  
+  
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 20px;
+    min-height: 100vh;
+  }
+  
+  .header {
+    max-width: 1400px;
+    margin: 0 auto 30px;
+    text-align: center;
+    position: relative;
+  }
+  
+  .theme-toggle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    padding: 8px 14px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+  }
+  
+  .theme-toggle:hover {
+    background: var(--accent-primary);
+    color: white;
+    border-color: var(--accent-primary);
+  }
+  
+  .header h1 {
+    font-size: 2rem;
+    margin-bottom: 10px;
+    color: #f1f5f9;
+  }
+  
+  .header p {
+    color: var(--text-tertiary);
+    margin-bottom: 20px;
+  }
+  
+  .controls {
+    max-width: 1400px;
+    margin: 0 auto 30px;
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  
+  .input-group {
+    display: flex;
+    gap: 10px;
+    flex: 1;
+    min-width: 250px;
+  }
+  
+  #cityInput {
+    flex: 1;
+    padding: 10px 15px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border-radius: 6px;
+    font-size: 0.95rem;
+  }
+  
+  #cityInput:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+  
+  #fetchBtn {
+    padding: 10px 24px;
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: all 0.3s ease;
+  }
+  
+  #fetchBtn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  }
+  
+  #fetchBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  .slicer-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .slicer-label {
+    font-size: 0.85rem;
+    color: var(--text-tertiary);
+    align-self: center;
+    min-width: 60px;
+  }
+  
+  .slicer-toggle {
+    padding: 8px 14px;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+  }
+  
+  .slicer-toggle:hover {
+    background: var(--accent-secondary);
+    border-color: var(--accent-primary);
+    color: white;
+  }
+  
+  .slicer-toggle.active {
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    color: white;
+    border-color: var(--accent-primary);
+  }
+  
+  #mainGrid {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+    gap: 20px;
+  }
+  
+  .api-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+  }
+  
+  .api-card:hover {
+    border-color: var(--accent-primary);
+    box-shadow: 0 8px 12px rgba(0, 0, 0, 0.4);
+  }
+  
+  .card-header {
+    padding: 16px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  
+  .card-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  
+  .api-badge {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    background: rgba(100, 116, 139, 0.1);
+    padding: 3px 8px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+  
+  .card-meta {
+    text-align: right;
+  }
+  
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: rgba(59, 130, 246, 0.15);
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 8px;
+  }
+  
+  .status-pill.ok {
+    background: rgba(74, 222, 128, 0.15);
+    color: var(--status-ok);
+  }
+  
+  .status-pill.error {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--status-error);
+  }
+  
+  .status-pill.loading {
+    background: rgba(251, 146, 60, 0.15);
+    color: var(--status-loading);
+  }
+  
+  .status-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: pulse 2s infinite;
+  }
+  
+  .status-pill.ok .status-dot {
+    animation: none;
+    background: var(--status-ok);
+  }
+  
+  .status-pill.error .status-dot {
+    animation: none;
+    background: var(--status-error);
+  }
+  
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  
+  .chart-wrap {
+    padding: 16px;
+  }
+  
+  .chart-container {
+    position: relative;
+    height: 350px;
+    background: var(--bg-primary);
+    border-radius: 6px;
+  }
+  
+  canvas {
+    display: block;
+    max-width: 100%;
+  }
+  
+  .loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-primary);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+  
+  .loading-overlay.hidden {
+    display: none;
+  }
+  
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(59, 130, 246, 0.2);
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  
+  .loading-text {
+    margin-top: 12px;
+    font-size: 0.9rem;
+    color: var(--text-tertiary);
+  }
+  
+  .error-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-primary);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+  
+  .error-icon {
+    font-size: 2.5rem;
+    margin-bottom: 8px;
+  }
+  
+  .error-text {
+    text-align: center;
+    color: var(--status-error);
+    font-size: 0.9rem;
+    padding: 0 20px;
+  }
+  
+  .footer {
+    max-width: 1400px;
+    margin: 40px auto 0;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: 0.85rem;
+  }
+  
+  #geo-info {
+    margin: 20px 0;
+    padding: 12px 16px;
+    background: rgba(59, 130, 246, 0.1);
+    border-left: 3px solid var(--accent-primary);
+    border-radius: 4px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    max-width: 1400px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  @media (max-width: 768px) {
+    #mainGrid {
+      grid-template-columns: 1fr;
+    }
+    
+    .controls {
+      flex-direction: column;
+    }
+    
+    .input-group {
+      width: 100%;
+    }
+    
+    .slicer-container {
+      width: 100%;
+      justify-content: flex-start;
+    }
+    
+    .header h1 {
+      font-size: 1.5rem;
+    }
+    
+    .chart-container {
+      height: 300px;
+    }
+  }
+</style>
+
+<body>
+  <div class="header">
+    <button class="theme-toggle" id="themeToggle" title="Cycle through color schemes">🎨 Midnight</button>
+    <h1>🌤️ SkyDiff</h1>
+    <p>Compare weather forecasts across multiple free APIs</p>
+  </div>
+  
+  <div class="controls">
+    <div class="input-group">
+      <input 
+        type="text" 
+        id="cityInput" 
+        placeholder="Enter city name or zip code (e.g., 'New York' or '10001')" 
+        value="15108"
+      >
+      <button id="fetchBtn">Fetch Forecasts</button>
+    </div>
+  </div>
+  
+  <div class="slicer-container" style="max-width: 1400px; margin: 0 auto 20px; padding: 0 20px;">
+    <span class="slicer-label">Show Models:</span>
+    <button class="slicer-toggle active" data-value="open-meteo-auto">Open-Meteo Auto</button>
+    <button class="slicer-toggle active" data-value="open-meteo-gfs">GFS</button>
+    <button class="slicer-toggle" data-value="open-meteo-icon">ICON</button>
+    <button class="slicer-toggle" data-value="open-meteo-ecmwf">ECMWF</button>
+    <button class="slicer-toggle" data-value="openweathermap">OpenWeatherMap</button>
+    <button class="slicer-toggle" data-value="weatherapi">WeatherAPI.com</button>
+    <button class="slicer-toggle" data-value="wttr">wttr.in</button>
+    <button class="slicer-toggle" data-value="noaa">NOAA/NWS</button>
+  </div>
+  
+  <div id="geo-info"></div>
+  
+  <div id="mainGrid"></div>
+  
+  <div class="footer">
+    <p>All data provided by free weather APIs. Zoom your browser to see more charts per row.</p>
+  </div>
 </body>
 </html>

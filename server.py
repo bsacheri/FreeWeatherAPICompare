@@ -1,0 +1,27 @@
+"""
+Local dev server — serves all files with no-cache headers so F5 always fetches fresh.
+Usage: python server.py
+Then open: http://localhost:8002/Index.html
+"""
+from http.server import SimpleHTTPRequestHandler, HTTPServer
+
+class NoCacheHandler(SimpleHTTPRequestHandler):
+    def end_headers(self):
+        # Cache CSV data files for 60 seconds so repeated loads are fast;
+        # force fresh fetch for the HTML page itself.
+        if self.path.endswith('.csv'):
+            self.send_header('Cache-Control', 'public, max-age=60')
+        else:
+            self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
+            self.send_header('Pragma', 'no-cache')
+            self.send_header('Expires', '0')
+        super().end_headers()
+
+    def log_message(self, format, *args):
+        pass  # suppress per-request console noise
+
+if __name__ == '__main__':
+    server = HTTPServer(('', 8002), NoCacheHandler)
+    print('Serving at http://localhost:8002/  (no-cache headers enabled)')
+    print('Press Ctrl+C to stop.')
+    server.serve_forever()
