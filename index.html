@@ -35,6 +35,146 @@ function showError(apiId, message) {
   overlay.innerHTML = `<div class="error-icon">⚠️</div><div class="error-text">${message}</div>`;
   container.appendChild(overlay);
 }
+
+function getCachedApiResult(apiId) {
+  if (!dataCache.results) return null;
+  const match = dataCache.results.find(res => res && res.value && res.value.api && res.value.api.id === apiId);
+  return match && match.value ? match.value : null;
+}
+
+function getAccumulationUnit(apiId) {
+  if (!apiId) return 'mm';
+  if (apiId.startsWith('open-meteo')) return 'mm';
+  if (apiId === 'weatherapi') return 'mm';
+  if (apiId === 'wttr') return 'mm';
+  if (apiId === 'openweathermap') return 'mm';
+  if (apiId === 'noaa') return 'mm';
+  return 'mm';
+}
+
+function formatCachedDataRows(apiEntry) {
+  if (!apiEntry || !apiEntry.data) return null;
+  const { api, data } = apiEntry;
+  const times = data.times || dataCache.times || [];
+  const temp = data.temp || [];
+  const pop = data.pop || [];
+  const precip = data.precip || [];
+  const rowCount = Math.max(times.length, temp.length, pop.length, precip.length);
+  const accumulationUnit = getAccumulationUnit(api.id);
+  const columns = [
+    'Time',
+    'Temperature (F)',
+    'Precip Chance (%)',
+    `Accumulation (${accumulationUnit})`
+  ];
+  const rows = [];
+
+  for (let i = 0; i < rowCount; i++) {
+    const time = times[i] instanceof Date
+      ? times[i].toLocaleString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        })
+      : '';
+    const tempValue = Number.isFinite(temp[i]) ? temp[i].toFixed(1) : '';
+    const popValue = Number.isFinite(pop[i]) ? pop[i].toFixed(0) : '';
+    const precipValue = Number.isFinite(precip[i]) ? precip[i].toFixed(2) : '';
+    rows.push([time, tempValue, popValue, precipValue]);
+  }
+
+  return { columns, rows, accumulationUnit };
+}
+
+function getCachedDataText(apiId) {
+  const apiEntry = getCachedApiResult(apiId);
+  if (!apiEntry) return null;
+  const tableData = formatCachedDataRows(apiEntry);
+  if (!tableData) return null;
+  const lines = [
+    apiEntry.api.name,
+    tableData.columns.join('\t'),
+    ...tableData.rows.map(row => row.join('\t'))
+  ];
+  return {
+    apiName: apiEntry.api.name,
+    text: lines.join('\n'),
+    tableData
+  };
+}
+
+function buildCachedDataTable(tableData) {
+  if (!tableData) return '<div class="data-modal-empty">No cached weather data is available for this chart yet.</div>';
+
+  const head = tableData.columns.map(col => `<th>${col}</th>`).join('');
+  const body = tableData.rows.map(row => `
+    <tr>${row.map(value => `<td>${value || ''}</td>`).join('')}</tr>
+  `).join('');
+
+  return `
+    <div class="data-grid-wrap">
+      <table class="data-grid-table">
+        <thead>
+          <tr>${head}</tr>
+        </thead>
+        <tbody>
+          ${body}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const helper = document.createElement('textarea');
+  helper.value = text;
+  helper.setAttribute('readonly', '');
+  helper.style.position = 'fixed';
+  helper.style.opacity = '0';
+  document.body.appendChild(helper);
+  helper.select();
+  document.execCommand('copy');
+  helper.remove();
+}
+
+function openDataModal(apiId) {
+  const modal = document.getElementById('dataModal');
+  const title = document.getElementById('dataModalTitle');
+  const body = document.getElementById('dataModalBody');
+  const copyBtn = document.getElementById('copyDataBtn');
+  if (!modal || !title || !body || !copyBtn) return;
+
+  const payload = getCachedDataText(apiId);
+  if (!payload) {
+    title.textContent = 'Cached weather data unavailable';
+    body.innerHTML = buildCachedDataTable(null);
+    copyBtn.disabled = true;
+    delete copyBtn.dataset.clipboardText;
+  } else {
+    title.textContent = `${payload.apiName} Cached Weather Data`;
+    body.innerHTML = buildCachedDataTable(payload.tableData);
+    copyBtn.disabled = false;
+    copyBtn.dataset.clipboardText = payload.text;
+  }
+
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeDataModal() {
+  const modal = document.getElementById('dataModal');
+  if (!modal) return;
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
+}
 // ─── CONFIG ────────────────────────────────────────────────────────────────
 // Free API keys are included for demonstration - these are rate-limited public keys.
 // Replace with your own from each provider's free tier.
@@ -278,6 +418,13 @@ function addToGlobalTemps(tempArr) {
   allTempsGlobal.push(tempArr);
 }
 
+// ─── HELPER: Detect if current theme is light ─────────────────────────────────
+function isLightTheme() {
+  const lightThemes = ['dawn', 'aqua', 'sage', 'peach', 'lavender'];
+  const currentTheme = document.body.className.replace('scheme-', '') || 'midnight';
+  return lightThemes.includes(currentTheme);
+}
+
 function buildDayNightPlugin(times) {
   return {
     id: 'daynight',
@@ -288,25 +435,46 @@ function buildDayNightPlugin(times) {
       const xScale = scales.x;
       const w = right - left;
       const totalHours = times.length;
+      const light = isLightTheme();
 
       times.forEach((t, i) => {
         const h = t.getHours() + t.getMinutes() / 60;
-        // Determine sky color based on hour
+        // Determine sky color based on hour and theme
         let color;
-        if (h >= 5.5 && h < 7.5) {
-          // Dawn
-          const p = (h - 5.5) / 2;
-          color = `rgba(253,230,138,${0.18 - p * 0.12})`;
-        } else if (h >= 7.5 && h < 18) {
-          // Day
-          color = 'rgba(186,230,253,0.08)';
-        } else if (h >= 18 && h < 20) {
-          // Dusk
-          const p = (h - 18) / 2;
-          color = `rgba(124,58,237,${0.05 + p * 0.22})`;
+        if (light) {
+          // Light theme colors - subtle, 50% lighter background
+          if (h >= 5.5 && h < 7.5) {
+            // Dawn - soft yellow
+            const p = (h - 5.5) / 2;
+            color = `rgba(253,230,138,${0.10 - p * 0.05})`;
+          } else if (h >= 7.5 && h < 18) {
+            // Day - very subtle light blue
+            color = 'rgba(186,230,253,0.04)';
+          } else if (h >= 18 && h < 20) {
+            // Dusk - soft purple
+            const p = (h - 18) / 2;
+            color = `rgba(124,58,237,${0.0375 + p * 0.075})`;
+          } else {
+            // Night - light gray
+            color = 'rgba(100,116,139,0.15)';
+          }
         } else {
-          // Night
-          color = 'rgba(15,23,42,0.55)';
+          // Dark theme colors (original)
+          if (h >= 5.5 && h < 7.5) {
+            // Dawn
+            const p = (h - 5.5) / 2;
+            color = `rgba(253,230,138,${0.225 - p * 0.15})`;
+          } else if (h >= 7.5 && h < 18) {
+            // Day
+            color = 'rgba(186,230,253,0.08)';
+          } else if (h >= 18 && h < 20) {
+            // Dusk
+            const p = (h - 18) / 2;
+            color = `rgba(124,58,237,${0.0625 + p * 0.275})`;
+          } else {
+            // Night
+            color = 'rgba(15,23,42,0.69)';
+          }
         }
 
         const xFrac = i / (totalHours - 1);
@@ -335,16 +503,15 @@ function buildMidnightPlugin(times) {
           const xFrac = i / (total - 1);
           const x = left + xFrac * w;
           ctx.save();
-          ctx.strokeStyle = 'rgba(148,163,184,0.5)';
-          ctx.lineWidth = 1;
-          ctx.setLineDash([4, 4]);
+          ctx.strokeStyle = 'rgba(148,163,184,0.8)';
+          ctx.lineWidth = 2.5;
           ctx.beginPath();
           ctx.moveTo(x, top);
           ctx.lineTo(x, bottom);
           ctx.stroke();
           // Label
           const label = t.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-          ctx.fillStyle = 'rgba(148,163,184,0.7)';
+          ctx.fillStyle = 'rgba(148,163,184,0.9)';
           ctx.font = '9px Space Mono, monospace';
           ctx.textAlign = 'center';
           ctx.fillText(label, x, top - 4);
@@ -492,6 +659,30 @@ function renderChart(apiId, data, yTempRange, forcedTimes) {
     return;
   }
   const ctx = canvas.getContext('2d');
+  // Custom grid plugin: only show vertical bars for visible hour labels
+  const visibleHourGridPlugin = {
+    id: 'visibleHourGrid',
+    beforeDraw(chart) {
+      const { ctx, chartArea, scales } = chart;
+      if (!scales.x) return;
+      ctx.save();
+      ctx.globalAlpha = 0.18;
+      for (let i = 0; i < chart.data.labels.length; i++) {
+        if (chart.data.labels[i]) {
+          const x = scales.x.getPixelForTick(i);
+          ctx.beginPath();
+          ctx.moveTo(x, chartArea.top);
+          ctx.lineTo(x, chartArea.bottom);
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([]);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+  };
+
   chartInstances[apiId] = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -503,7 +694,7 @@ function renderChart(apiId, data, yTempRange, forcedTimes) {
           data: temp,
           borderColor: '#fb923c',
           backgroundColor: 'rgba(251,146,60,0.08)',
-          borderWidth: 2,
+          borderWidth: 2.8,
           pointRadius: 0,
           tension: 0.4,
           fill: false,
@@ -571,7 +762,7 @@ function renderChart(apiId, data, yTempRange, forcedTimes) {
       },
       scales: {
         x: {
-          grid: { color: 'rgba(30,45,69,0.4)', drawTicks: false },
+          grid: { display: false }, // Hide default grid
           border: { color: '#1e2d45' },
           ticks: {
             color: '#64748b',
@@ -583,13 +774,13 @@ function renderChart(apiId, data, yTempRange, forcedTimes) {
         },
         yTemp: {
           position: 'left',
-          grid: { color: 'rgba(30,45,69,0.3)' },
+          grid: { color: 'rgba(30,45,69,0.13)' },
           border: { color: '#1e2d45', dash: [2, 2] },
           min: yTempRange && yTempRange[0] != null ? yTempRange[0] : undefined,
           max: yTempRange && yTempRange[1] != null ? yTempRange[1] : undefined,
           ticks: {
             color: '#fb923c',
-            font: { family: 'Space Mono', size: 8 },
+            font: { family: 'Space Mono', size: 12 },
             callback: v => `${Math.round(v)}°`,
             maxTicksLimit: 6,
             padding: 4
@@ -614,8 +805,272 @@ function renderChart(apiId, data, yTempRange, forcedTimes) {
         }
       }
     },
-    plugins: [dayNightPlugin, midnightPlugin, minMaxPlugin]
+    plugins: [dayNightPlugin, midnightPlugin, minMaxPlugin, visibleHourGridPlugin]
   });
+}
+
+// ─── COMBINED CHART RENDERING ─────────────────────────────────────────────────
+let combinedChartInstance = null;
+const combinedHiddenSources = new Set();
+
+function syncCombinedLegendState() {
+  const legend = document.getElementById('combinedLegend');
+  if (!legend) return;
+
+  legend.querySelectorAll('.legend-item[data-api-id]').forEach(item => {
+    const isHidden = combinedHiddenSources.has(item.dataset.apiId);
+    item.classList.toggle('is-hidden', isHidden);
+    item.setAttribute('aria-pressed', String(!isHidden));
+    item.title = isHidden ? 'Click to show this model' : 'Click to hide this model';
+  });
+}
+
+function setupCombinedLegendInteractions() {
+  const legend = document.getElementById('combinedLegend');
+  if (!legend) return;
+
+  const toggleLegendItem = (item) => {
+    if (!item || !combinedChartInstance) return;
+
+    const { apiId } = item.dataset;
+    const shouldHide = !combinedHiddenSources.has(apiId);
+
+    combinedChartInstance.data.datasets.forEach((dataset, index) => {
+      if (dataset.apiId === apiId) {
+        combinedChartInstance.setDatasetVisibility(index, !shouldHide);
+      }
+    });
+
+    if (shouldHide) {
+      combinedHiddenSources.add(apiId);
+    } else {
+      combinedHiddenSources.delete(apiId);
+    }
+
+    combinedChartInstance.update();
+    syncCombinedLegendState();
+  };
+
+  legend.onclick = (event) => {
+    toggleLegendItem(event.target.closest('.legend-item[data-api-id]'));
+  };
+
+  legend.onkeydown = (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const item = event.target.closest('.legend-item[data-api-id]');
+    if (!item) return;
+    event.preventDefault();
+    toggleLegendItem(item);
+  };
+
+  syncCombinedLegendState();
+}
+
+
+function renderCombinedChart(checkedSources, yTempRange, forcedTimes) {
+  const canvas = document.getElementById('combinedChart');
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+
+  // Build datasets from cached results for selected APIs
+  const datasets = [];
+  const legendHTML = [];
+  const labels = forcedTimes.map((t, i) => {
+    if (i % 6 === 0) {
+      const h = t.getHours();
+      return h === 0 ? '12a' : h < 12 ? `${h}a` : h === 12 ? '12p' : `${h-12}p`;
+    }
+    return '';
+  });
+
+  // Add temperature lines, precipitation bars, and precipitation chance lines for each selected API
+  dataCache.results.forEach(res => {
+    if (res && res.value && res.value.data && res.value.api) {
+      const { api, data } = res.value;
+      if (checkedSources.includes(api.id)) {
+        // Temperature line
+        datasets.push({
+          type: 'line',
+          label: api.name,
+          apiId: api.id,
+          data: data.temp,
+          borderColor: api.color,
+          backgroundColor: 'transparent',
+          borderWidth: 2.5,
+          pointRadius: 0,
+          tension: 0.3,
+          yAxisID: 'yTemp',
+          fill: false,
+          order: 1
+        });
+        // Precipitation bars (if available)
+        if (data.precip) {
+          datasets.push({
+            type: 'bar',
+            label: api.name + ' Precip',
+            apiId: api.id,
+            data: data.precip,
+            backgroundColor: api.color + '55', // semi-transparent
+            borderColor: api.color,
+            borderWidth: 1,
+            yAxisID: 'yPrecip',
+            barPercentage: 0.7,
+            categoryPercentage: 0.9,
+            order: 0
+          });
+        }
+        // Precipitation chance line (if available)
+        if (data.pop) {
+          datasets.push({
+            type: 'line',
+            label: api.name + ' Precip Chance',
+            apiId: api.id,
+            data: data.pop,
+            borderColor: api.color,
+            backgroundColor: 'rgba(167,139,250,0.0)',
+            borderWidth: 1.5,
+            pointRadius: 0,
+            tension: 0.3,
+            fill: false,
+            yAxisID: 'yPop',
+            borderDash: [3, 2],
+            order: 2
+          });
+        }
+        // Add to legend
+        legendHTML.push(`
+          <div class=\"legend-item\" data-api-id=\"${api.id}\" role=\"button\" tabindex=\"0\" aria-pressed=\"true\">\n            <div class=\"legend-color\" style=\"background-color: ${api.color}; width: 24px;\"></div>\n            <span>${api.name}</span>\n          </div>\n        `);
+      }
+    }
+  });
+
+  // Update legend display
+  document.getElementById('combinedLegend').innerHTML = legendHTML.join('');
+
+  // Destroy existing chart if exists
+  if (combinedChartInstance) {
+    combinedChartInstance.destroy();
+  }
+
+  // Plugins
+  const dayNightPlugin = buildDayNightPlugin(forcedTimes);
+  const midnightPlugin = buildMidnightPlugin(forcedTimes);
+
+  // Custom grid plugin for 4-hour vertical bars
+  const fourHourGridPlugin = {
+    id: 'fourHourGrid',
+    beforeDraw(chart) {
+      const { ctx, chartArea, scales } = chart;
+      if (!scales.x) return;
+      ctx.save();
+      ctx.globalAlpha = 0.18;
+      for (let i = 0; i < scales.x.ticks.length; i++) {
+        if (i % 4 === 0) {
+          const x = scales.x.getPixelForTick(i);
+          ctx.beginPath();
+          ctx.moveTo(x, chartArea.top);
+          ctx.lineTo(x, chartArea.bottom);
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([]);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+  };
+
+  combinedChartInstance = new Chart(ctx, {
+    type: 'bar', // base type for bar+line
+    data: {
+      labels,
+      datasets
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 400 },
+      interaction: { mode: 'index', intersect: false },
+      layout: { padding: { top: 20, left: 4, right: 4, bottom: 0 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(17,24,39,0.95)',
+          borderColor: '#1e2d45',
+          borderWidth: 1,
+          titleColor: '#94a3b8',
+          bodyColor: '#e2e8f0',
+          padding: 10,
+          titleFont: { family: 'Space Mono', size: 9 },
+          bodyFont: { family: 'Space Mono', size: 10 },
+          callbacks: {
+            title(items) {
+              const i = items[0].dataIndex;
+              const t = forcedTimes[i];
+              return t.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric' });
+            },
+            label(item) {
+              if (item.dataset.type === 'bar') {
+                return ` ${item.dataset.label}: ${item.raw?.toFixed(2) ?? ''} mm`;
+              }
+              return ` ${item.dataset.label}: ${item.raw?.toFixed(1) ?? ''}°F`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false }, // Hide default grid
+          border: { color: '#1e2d45' },
+          ticks: {
+            color: '#64748b',
+            font: { family: 'Space Mono', size: 8 },
+            maxRotation: 0,
+            autoSkip: false,
+            padding: 4
+          }
+        },
+        yTemp: {
+          position: 'left',
+          grid: { color: 'rgba(30,45,69,0.13)' },
+          border: { color: '#1e2d45', dash: [2, 2] },
+          min: yTempRange && yTempRange[0] != null ? yTempRange[0] : undefined,
+          max: yTempRange && yTempRange[1] != null ? yTempRange[1] : undefined,
+          ticks: {
+            color: '#fb923c',
+            font: { family: 'Space Mono', size: 12 },
+            callback: v => `${Math.round(v)}°`,
+            maxTicksLimit: 6,
+            padding: 4
+          }
+        },
+        yPrecip: {
+          position: 'right',
+          grid: { display: false },
+          border: { color: '#1e2d45' },
+          min: 0,
+          title: { display: true, text: 'Precip (mm)', color: '#38bdf8', font: { family: 'Space Mono', size: 10 } },
+          ticks: {
+            color: '#38bdf8',
+            font: { family: 'Space Mono', size: 10 },
+            callback: v => v > 0 ? v.toFixed(2) : '',
+            maxTicksLimit: 5,
+            padding: 4
+          }
+        }
+      }
+    },
+    plugins: [dayNightPlugin, midnightPlugin, fourHourGridPlugin]
+  });
+
+  combinedChartInstance.data.datasets.forEach((dataset, index) => {
+    if (combinedHiddenSources.has(dataset.apiId)) {
+      combinedChartInstance.setDatasetVisibility(index, false);
+    }
+  });
+  combinedChartInstance.update();
+  setupCombinedLegendInteractions();
 }
 
 
@@ -633,6 +1088,7 @@ function createCard(api) {
         <div class="api-badge">${api.badge}</div>
       </div>
       <div class="card-meta">
+        <button class="data-view-btn" type="button" data-api-id="${api.id}">Cached Data</button>
         <div style="color:#64748b;font-size:0.6rem">${api.docs}</div>
         <div id="status-${api.id}"><span class="status-pill loading"><span class="status-dot"></span>fetching</span></div>
       </div>
@@ -686,6 +1142,65 @@ function applyTheme(index) {
 function cycleTheme() {
   currentThemeIndex = (currentThemeIndex + 1) % themes.length;
   applyTheme(currentThemeIndex);
+}
+
+// ─── VERSION INFO ──────────────────────────────────────────────────────────
+function loadVersionInfo() {
+  fetch('version.txt')
+    .then(r => r.text())
+    .then(text => {
+      const lines = text.trim().split('\n');
+      const versionMatch = lines.find(l => l.startsWith('version='));
+      const dateMatch = lines.find(l => l.startsWith('lastUpdated='));
+      
+      if (versionMatch && dateMatch) {
+        const version = versionMatch.split('=')[1];
+        const dateStr = dateMatch.split('=')[1];
+        const date = new Date(dateStr);
+        const formatted = date.toLocaleString('en-US', { 
+          month: 'short', 
+          day: 'numeric', 
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+        document.getElementById('version-info').textContent = `Version ${version} | Last Updated: ${formatted}`;
+      }
+    })
+    .catch(() => {
+      document.getElementById('version-info').textContent = 'Version: unknown';
+    });
+}
+
+// ─── PROGRESS BAR MANAGEMENT ──────────────────────────────────────────────────
+let progressTimer = null;
+let progressWidth = 0;
+
+function showProgressBar() {
+  const bar = document.getElementById('progressBar');
+  bar.classList.add('active');
+  progressWidth = 10;
+  bar.style.width = progressWidth + '%';
+  
+  // Animate progress bar incrementally
+  progressTimer = setInterval(() => {
+    progressWidth += Math.random() * 20;
+    if (progressWidth > 90) progressWidth = 90;
+    bar.style.width = progressWidth + '%';
+  }, 200);
+}
+
+function completeProgressBar() {
+  const bar = document.getElementById('progressBar');
+  clearInterval(progressTimer);
+  bar.style.width = '100%';
+  
+  // Hide after animation completes
+  setTimeout(() => {
+    bar.classList.remove('active');
+    bar.style.width = '0%';
+  }, 300);
 }
 
 // ─── DATA CACHE ──────────────────────────────────────────────────────────────
@@ -760,6 +1275,11 @@ function renderChartsFromCache() {
     }
   });
 
+  // Render combined chart
+  if (checkedSources.length > 0) {
+    renderCombinedChart(checkedSources, dataCache.yTempRange, dataCache.times);
+  }
+
   btn.disabled = false;
   btn.textContent = 'Fetch Forecasts';
 }
@@ -770,6 +1290,9 @@ async function loadAll(forceRefresh = false) {
   const cityInput = document.getElementById('cityInput');
   btn.disabled = true;
   btn.textContent = 'Loading…';
+  
+  // Show progress bar
+  showProgressBar();
 
   let geoInput = cityInput.value.trim() || '15108';
   
@@ -777,6 +1300,7 @@ async function loadAll(forceRefresh = false) {
   if (!forceRefresh && isCacheValid(geoInput)) {
     // Use cached data without refetching
     renderChartsFromCache();
+    completeProgressBar();
     return;
   }
 
@@ -814,6 +1338,7 @@ async function loadAll(forceRefresh = false) {
     });
     btn.disabled = false;
     btn.textContent = 'Fetch Forecasts';
+    completeProgressBar();
     return;
   }
 
@@ -852,8 +1377,14 @@ async function loadAll(forceRefresh = false) {
     }
   });
 
+  // Render combined chart
+  if (checkedSources.length > 0) {
+    renderCombinedChart(checkedSources, yTempRange, times);
+  }
+
   btn.disabled = false;
   btn.textContent = 'Fetch Forecasts';
+  completeProgressBar();
 }
 
 // ─── BOOT ────────────────────────────────────────────────────────────────────
@@ -862,6 +1393,9 @@ let touchStartY = 0;
 window.addEventListener('DOMContentLoaded', () => {
   // Initialize theme from localStorage
   initTheme();
+  
+  // Load version info
+  loadVersionInfo();
   
   // Theme toggle button
   document.getElementById('themeToggle').addEventListener('click', cycleTheme);
@@ -888,6 +1422,41 @@ window.addEventListener('DOMContentLoaded', () => {
         renderChartsFromCache();
       }
     });
+  });
+
+  document.addEventListener('click', async event => {
+    const dataButton = event.target.closest('.data-view-btn[data-api-id]');
+    if (dataButton) {
+      openDataModal(dataButton.dataset.apiId);
+      return;
+    }
+
+    if (event.target.id === 'closeDataModalBtn' || event.target.id === 'dataModal') {
+      closeDataModal();
+      return;
+    }
+
+    if (event.target.id === 'copyDataBtn') {
+      const copyBtn = event.target;
+      const text = copyBtn.dataset.clipboardText || '';
+      if (!text) return;
+      const originalLabel = copyBtn.textContent;
+      try {
+        await copyTextToClipboard(text);
+        copyBtn.textContent = 'Copied';
+      } catch (error) {
+        copyBtn.textContent = 'Copy Failed';
+      }
+      setTimeout(() => {
+        copyBtn.textContent = originalLabel;
+      }, 1400);
+    }
+  });
+
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      closeDataModal();
+    }
   });
   
   // Pull-to-refresh: detect swipe down from top
@@ -1129,6 +1698,18 @@ window.addEventListener('DOMContentLoaded', () => {
     flex: 1;
     min-width: 250px;
   }
+
+  #geo-info {
+    flex: 0 1 420px;
+    min-width: 260px;
+    margin: 0;
+    padding: 12px 16px;
+    background: rgba(59, 130, 246, 0.1);
+    border-left: 3px solid var(--accent-primary);
+    border-radius: 4px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+  }
   
   #cityInput {
     flex: 1;
@@ -1254,6 +1835,30 @@ window.addEventListener('DOMContentLoaded', () => {
   .card-meta {
     text-align: right;
   }
+
+  .data-view-btn {
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+
+  .data-view-btn:hover {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: #fff;
+  }
+
+  .data-view-btn:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 2px;
+  }
   
   .status-pill {
     display: inline-flex;
@@ -1322,6 +1927,49 @@ window.addEventListener('DOMContentLoaded', () => {
     max-width: 100%;
   }
   
+  .combined-chart-container {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 0;
+    margin-right: 18px;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    cursor: pointer;
+    opacity: 1;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+  }
+
+  .legend-item:hover {
+    transform: translateY(-1px);
+  }
+
+  .legend-item:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+
+  .legend-item.is-hidden {
+    opacity: 0.45;
+  }
+
+  .legend-color {
+    width: 20px;
+    height: 3px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  
   .loading-overlay {
     position: absolute;
     top: 0;
@@ -1386,6 +2034,124 @@ window.addEventListener('DOMContentLoaded', () => {
     font-size: 0.9rem;
     padding: 0 20px;
   }
+
+  .data-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(2, 6, 23, 0.72);
+    z-index: 10000;
+  }
+
+  .data-modal.open {
+    display: flex;
+  }
+
+  .data-modal-panel {
+    width: min(960px, 100%);
+    max-height: min(80vh, 900px);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .data-modal-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .data-modal-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .data-modal-actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .data-modal-btn {
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+
+  .data-modal-btn:hover:not(:disabled) {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: #fff;
+  }
+
+  .data-modal-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .data-modal-body {
+    margin: 0;
+    padding: 18px;
+    overflow: auto;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+  }
+
+  .data-grid-wrap {
+    overflow: auto;
+  }
+
+  .data-grid-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Space Mono', Consolas, monospace;
+    font-size: 0.78rem;
+    line-height: 1.45;
+  }
+
+  .data-grid-table th,
+  .data-grid-table td {
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .data-grid-table th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-weight: 700;
+    z-index: 1;
+  }
+
+  .data-grid-table tbody tr:nth-child(even) td {
+    background: rgba(148, 163, 184, 0.06);
+  }
+
+  .data-modal-empty {
+    padding: 12px;
+    color: var(--text-secondary);
+    font-family: 'Space Mono', Consolas, monospace;
+    font-size: 0.82rem;
+  }
   
   .footer {
     max-width: 1400px;
@@ -1397,17 +2163,20 @@ window.addEventListener('DOMContentLoaded', () => {
     font-size: 0.85rem;
   }
   
-  #geo-info {
-    margin: 20px 0;
-    padding: 12px 16px;
-    background: rgba(59, 130, 246, 0.1);
-    border-left: 3px solid var(--accent-primary);
-    border-radius: 4px;
-    font-size: 0.9rem;
-    color: var(--text-secondary);
-    max-width: 1400px;
-    margin-left: auto;
-    margin-right: auto;
+  .progress-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+    width: 0%;
+    opacity: 0;
+    z-index: 9999;
+    transition: opacity 0.3s ease, width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .progress-bar.active {
+    opacity: 1;
   }
   
   @media (max-width: 768px) {
@@ -1421,6 +2190,11 @@ window.addEventListener('DOMContentLoaded', () => {
     
     .input-group {
       width: 100%;
+    }
+
+    #geo-info {
+      width: 100%;
+      min-width: 0;
     }
     
     .slicer-container {
@@ -1439,6 +2213,7 @@ window.addEventListener('DOMContentLoaded', () => {
 </style>
 
 <body>
+  <div id="progressBar" class="progress-bar"></div>
   <div class="header">
     <button class="theme-toggle" id="themeToggle" title="Cycle through color schemes">🎨 Midnight</button>
     <h1>🌤️ SkyDiff</h1>
@@ -1446,6 +2221,7 @@ window.addEventListener('DOMContentLoaded', () => {
   </div>
   
   <div class="controls">
+    <div id="geo-info"></div>
     <div class="input-group">
       <input 
         type="text" 
@@ -1468,13 +2244,35 @@ window.addEventListener('DOMContentLoaded', () => {
     <button class="slicer-toggle" data-value="wttr">wttr.in</button>
     <button class="slicer-toggle" data-value="noaa">NOAA/NWS</button>
   </div>
+
+  <div id="dataModal" class="data-modal" aria-hidden="true">
+    <div class="data-modal-panel" role="dialog" aria-modal="true" aria-labelledby="dataModalTitle">
+      <div class="data-modal-header">
+        <div id="dataModalTitle" class="data-modal-title">Cached Weather Data</div>
+        <div class="data-modal-actions">
+          <button id="copyDataBtn" class="data-modal-btn" type="button">Copy to Clipboard</button>
+          <button id="closeDataModalBtn" class="data-modal-btn" type="button">Close</button>
+        </div>
+      </div>
+      <div id="dataModalBody" class="data-modal-body"></div>
+    </div>
+  </div>
   
-  <div id="geo-info"></div>
+  <div id="combinedChartPanel" style="max-width: 1400px; margin: 30px auto;">
+    <div class="combined-chart-container">
+      <h2 style="margin: 0 0 15px 0; color: var(--text-primary); font-size: 1.3rem;">Combined Model Comparison</h2>
+      <div class="chart-container" id="combinedChartContainer" style="height: 400px;">
+        <canvas id="combinedChart"></canvas>
+      </div>
+      <div id="combinedLegend" style="padding: 20px 0 0 0; background: none; border: none; min-width: 200px; max-width: 100%; max-height: 80px; overflow-x: auto; display: flex; flex-wrap: wrap;"></div>
+    </div>
+  </div>
   
   <div id="mainGrid"></div>
   
   <div class="footer">
     <p>All data provided by free weather APIs. Zoom your browser to see more charts per row.</p>
+    <p id="version-info" style="font-size: 0.75rem; color: var(--text-tertiary); margin-top: 10px;">Version: loading...</p>
   </div>
 </body>
 </html>
