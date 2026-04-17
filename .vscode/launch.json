@@ -1,0 +1,38 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: server.py",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/server.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "Open SkyDiff in Browser",
+      "type": "msedge",
+      "request": "launch",
+      "url": "http://localhost:8002/index.html",
+      "webRoot": "${workspaceFolder}"
+    },
+    {
+      "name": "Run start_server.bat",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "${workspaceFolder}\\start_server.bat",
+      "cwd": "${workspaceFolder}"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Launch SkyDiff",
+      "configurations": [
+        "Python: server.py",
+        "Open SkyDiff in Browser"
+      ],
+      "stopAll": true
+    }
+  ]
+}

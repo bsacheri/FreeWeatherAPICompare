@@ -1,0 +1,16 @@
+#!/bin/sh
+
+set -e
+
+HOOK_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+while read local_ref local_sha remote_ref remote_sha
+do
+  if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+    continue
+  fi
+
+  python "$HOOK_DIR/check_version_on_push.py" "$local_sha"
+done
+
+exit 0
